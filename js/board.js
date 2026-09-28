@@ -63,6 +63,7 @@ export class Board {
     host.classList.add('board');
     this.canvas = document.createElement('canvas');
     this.canvas.setAttribute('role', 'img');
+    this.canvas.setAttribute('aria-label', opts.label || 'Map chart');
     host.appendChild(this.canvas);
     this.ctx = this.canvas.getContext('2d');
     this.canvas.addEventListener('pointermove', (e) => this.hover(e));

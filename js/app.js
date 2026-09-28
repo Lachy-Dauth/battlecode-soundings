@@ -260,7 +260,7 @@ function viewLanding() {
   $('#l-files').onclick = () => $('#pick-files').click();
   $('#l-folder').onclick = () => $('#pick-folder').click();
   const geom = parseMap(HERO_MAP);
-  const board = new Board($('#hero-board'), { ...geom, spawns: geom.dragons.map((d) => ({ team: d.team, body: d.body })), portals: geom.portalOf }, { maxHeight: 420 });
+  const board = new Board($('#hero-board'), { ...geom, spawns: geom.dragons.map((d) => ({ team: d.team, body: d.body })), portals: geom.portalOf }, { maxHeight: 420, label: 'Chart of the Autarky map: kelp, portals, pearl beds and both starting positions' });
   return { landing: true, cleanup: () => board.destroy() };
 }
 
@@ -513,6 +513,7 @@ function viewMaps(key) {
   $$('.map-chip').forEach((b) => { b.onclick = () => { location.hash = `#/maps/${encodeURIComponent(b.dataset.key)}`; }; });
   let info = null;
   const board = new Board($('#map-board'), geom, {
+    label: `Heatmap of ${m.name}; the panel beside it describes the selected layer`,
     maxHeight: Math.max(420, innerHeight - 250),
     onHover: (cell) => showCell(cell),
   });
@@ -775,7 +776,7 @@ function renderGame(x, d, onCleanup) {
     ${d.logs && d.logs.length ? `<section class="section"><header><h2>Bot output</h2><p>${plural(d.logs.length, 'line')} of logs and indicators kept in this replay.</p><input class="aside" id="log-q" type="search" placeholder="Filter logs" style="border:1px solid var(--rule-strong);border-radius:6px;padding:5px 9px;background:var(--surface)"></header><div class="feed" id="g-logs" style="max-height:360px"></div></section>` : ''}`;
 
   // Board player.
-  const board = new Board($('#g-board'), geom, { maxHeight: Math.max(380, innerHeight - 260) });
+  const board = new Board($('#g-board'), geom, { maxHeight: Math.max(380, innerHeight - 260), label: 'The board at the selected round; the scoreboard beside it gives the numbers' });
   board.flipTeams = s === 1;
   board.showSpawns = false;
   onCleanup(() => board.destroy());
