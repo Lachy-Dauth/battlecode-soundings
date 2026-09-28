@@ -49,8 +49,9 @@ export function roundsChart(host, series, opts = {}) {
   const tip = tipBox(host);
   const svg = el('svg', { role: 'img', 'aria-label': opts.label || 'chart' }, host);
   const n = Math.max(1, ...series.map((s) => s.values.length));
-  const max = Math.max(1, ...series.flatMap((s) => [...s.values, ...(s.band ? s.band.hi : [])]));
+  const max = opts.max ?? Math.max(1, ...series.flatMap((s) => [...s.values, ...(s.band ? s.band.hi : [])]));
   const y = niceTicks(max, 4);
+  const suffix = opts.suffix || '';
   const draw = () => {
     const W = Math.max(260, host.clientWidth), H = opts.height || 220, m = { l: 40, r: 12, t: 10, b: 24 };
     svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.setAttribute('width', W); svg.setAttribute('height', H);
@@ -60,7 +61,7 @@ export function roundsChart(host, series, opts = {}) {
     const g = el('g', { class: 'grid' }, svg);
     for (const v of y.ticks) {
       el('line', { x1: m.l, x2: W - m.r, y1: Y(v), y2: Y(v) }, g);
-      el('text', { x: m.l - 6, y: Y(v) + 4, 'text-anchor': 'end', class: 'axis' }, g).textContent = fmt(v);
+      el('text', { x: m.l - 6, y: Y(v) + 4, 'text-anchor': 'end', class: 'axis' }, g).textContent = `${fmt(v)}${suffix}`;
     }
     const xStep = niceTicks(n, Math.max(2, Math.floor((W - m.l) / 80))).ticks;
     for (const r of xStep) if (r < n) el('text', { x: X(r), y: H - 6, 'text-anchor': 'middle', class: 'axis' }, g).textContent = r;
@@ -107,7 +108,7 @@ export function roundsChart(host, series, opts = {}) {
         if (v == null) { dots[k].setAttribute('visibility', 'hidden'); return; }
         dots[k].setAttribute('cx', X(i)); dots[k].setAttribute('cy', Y(v)); dots[k].setAttribute('visibility', 'visible');
         const band = s.band && s.band.lo[i] != null ? ` <span class="muted">(${fmt(s.band.lo[i])}–${fmt(s.band.hi[i])})</span>` : '';
-        rows.push(`<div><i class="key ${s.cls}"></i>${esc(s.name)} <b>${fmt(v, s.decimals || 0)}</b>${band}</div>`);
+        rows.push(`<div><i class="key ${s.cls}"></i>${esc(s.name)} <b>${fmt(v, s.decimals || 0)}${suffix}</b>${band}</div>`);
       });
       tip.innerHTML = `<div class="tip-h">Round ${i}${opts.nAt ? `, ${opts.nAt(i)}` : ''}</div>${rows.join('')}`;
       tip.style.display = 'block';

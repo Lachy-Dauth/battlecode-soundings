@@ -193,3 +193,39 @@ export function mapLayer(sel, geom, { layer, who, flip, causes, fromRound = 0, t
   }
   return { values: out, games };
 }
+
+/**
+ * Who is ahead, round by round, on the engine's own tiebreak (longest dragon,
+ * then total length), among games still going. Also: how often you go on to
+ * win from ahead or behind at a few checkpoints.
+ */
+export function leadStats(sel, checkpoints = [50, 100, 200, 300]) {
+  const ahead = [], behind = [], going = [];
+  const cond = checkpoints.map((r) => ({ r, ahead: 0, aheadWon: 0, behind: 0, behindWon: 0 }));
+  for (const x of sel) {
+    const t = x.g.timeline;
+    if (!t.longA) continue;
+    const s = x.side;
+    const [ly, lo, gy, go] = s === 0 ? [t.lenA, t.lenB, t.longA, t.longB] : [t.lenB, t.lenA, t.longB, t.longA];
+    for (let r = 0; r < ly.length; r++) {
+      const lead = gy[r] !== go[r] ? Math.sign(gy[r] - go[r]) : Math.sign(ly[r] - lo[r]);
+      going[r] = (going[r] || 0) + 1;
+      if (lead > 0) ahead[r] = (ahead[r] || 0) + 1;
+      else if (lead < 0) behind[r] = (behind[r] || 0) + 1;
+    }
+    for (const c of cond) {
+      if (c.r >= ly.length) continue;
+      const lead = gy[c.r] !== go[c.r] ? Math.sign(gy[c.r] - go[c.r]) : Math.sign(ly[c.r] - lo[c.r]);
+      if (lead > 0) { c.ahead++; if (x.res === 'win') c.aheadWon++; }
+      else if (lead < 0) { c.behind++; if (x.res === 'win') c.behindWon++; }
+    }
+  }
+  const out = { ahead: [], behind: [], going };
+  for (let r = 0; r < going.length; r++) {
+    if (going[r] < Math.min(3, sel.length)) break;
+    out.ahead.push(((ahead[r] || 0) / going[r]) * 100);
+    out.behind.push(((behind[r] || 0) / going[r]) * 100);
+  }
+  out.checkpoints = cond;
+  return out;
+}

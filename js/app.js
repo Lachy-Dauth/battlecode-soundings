@@ -1,5 +1,5 @@
 import { Pool, sourcesFrom, analyseAll } from './ingest.js';
-import { selectGames, aggregate, seriesStats, mapLayer, botPopularity, botLabel, selfInflicted, enemyInflicted, resolveSide, outcome, mirror } from './aggregate.js';
+import { selectGames, aggregate, seriesStats, mapLayer, botPopularity, botLabel, selfInflicted, enemyInflicted, resolveSide, outcome, leadStats } from './aggregate.js';
 import { Board, scaleTop, rampCss } from './board.js';
 import { roundsChart, butterfly, flowChart, columns, splitBar, esc, fmt, pct } from './charts.js';
 import { CAUSES, CAUSE_LABEL, ENEMY_CAUSES } from './analyse.js';
@@ -23,7 +23,7 @@ const S = {
   perspective: store.get('perspective', 'auto'),
   filters: { map: 'all', result: 'all', bot: 'all', opp: 'all' },
   geoms: new Map(),
-  mapView: { layer: 'territory', flip: true, causes: 'all' },
+  mapView: { layer: 'territory', flip: true, causes: 'all', phase: 'all' },
   detail: new Map(),
 };
 let pool = null;
@@ -340,6 +340,14 @@ function viewOverview() {
     </section>
 
     <section class="section">
+      <header><h2>When games turn</h2><p>Share of games you are ahead in, round by round, judged the way the engine scores a game at round 500: longest dragon first, then total length.</p></header>
+      <div class="cols-2-1">
+        <div><div class="legend"><span><i class="key you"></i>You're ahead</span><span><i class="key opp"></i>You're behind</span></div><div id="lead-chart"></div></div>
+        <div id="lead-table"></div>
+      </div>
+    </section>
+
+    <section class="section">
       <header><h2>Tactics</h2><p>How each side spends its turns.</p></header>
       <div class="figures">
         <div class="figure"><div class="k">Splits a game</div><div class="v"><span class="you-ink">${fmt(perGame(you.splits, n), 1)}</span> <small>vs</small> <span class="opp-ink">${fmt(perGame(opp.splits, n), 1)}</span></div><div class="s">average child ${fmt(you.splitSegments / (you.splits || 1), 1)} long</div></div>
@@ -347,7 +355,7 @@ function viewOverview() {
         <div class="figure"><div class="k">Peak dragons alive</div><div class="v"><span class="you-ink">${fmt(perGame(you.peakDragons, n), 1)}</span> <small>vs</small> <span class="opp-ink">${fmt(perGame(opp.peakDragons, n), 1)}</span></div></div>
         <div class="figure"><div class="k">Peak total length</div><div class="v"><span class="you-ink">${fmt(perGame(you.peakTotal, n), 0)}</span> <small>vs</small> <span class="opp-ink">${fmt(perGame(opp.peakTotal, n), 0)}</span></div></div>
         <div class="figure"><div class="k">Sonar pings a game</div><div class="v"><span class="you-ink">${fmt(perGame(you.pings, n), 0)}</span> <small>vs</small> <span class="opp-ink">${fmt(perGame(opp.pings, n), 0)}</span></div></div>
-        ${you.measuredTurns ? `<div class="figure"><div class="k">Instructions a turn</div><div class="v you-ink">${fmt(you.instrSum / you.measuredTurns / 1000, 0)}k</div><div class="s">peak ${fmt(you.instrMax / 1e6, 1)}M; ${fmt(you.tle)} timeouts, ${fmt(you.exceeded)} over budget</div></div>` : ''}
+        ${you.measuredTurns ? `<div class="figure"><div class="k">Instructions a turn</div><div class="v you-ink">${fmtPow(you.instrSum / you.measuredTurns)}</div><div class="s">peak ${fmtPow(you.instrMax)}; ${fmt(you.tle)} timeouts, ${fmt(you.exceeded)} over budget</div></div>` : ''}
       </div>
     </section>
 
@@ -393,6 +401,18 @@ function viewOverview() {
     ], { height, label, nAt: (i) => `${plural(sy.n[i] || 0, 'game')} still going` });
   };
   drawSeries($('#len-chart'), 'lenA', 'lenB', 260, 'Total length by round');
+  const lead = leadStats(sel);
+  roundsChart($('#lead-chart'), [
+    { name: 'Ahead', values: lead.ahead, cls: 'you', decimals: 0 },
+    { name: 'Behind', values: lead.behind, cls: 'opp', decimals: 0 },
+  ], { height: 200, label: 'Share of games ahead by round', nAt: (i) => `${plural(lead.going[i] || 0, 'game')} going`, max: 100, suffix: '%' });
+  const cps = lead.checkpoints.filter((c) => c.ahead + c.behind >= 3);
+  $('#lead-table').innerHTML = cps.length ? `<table>
+    <thead><tr><th>At round</th><th class="num">Ahead, then won</th><th class="num">Behind, then won</th></tr></thead>
+    <tbody>${cps.map((c) => `<tr><td class="num" style="text-align:left">${c.r}</td>
+      <td class="num">${c.ahead ? `<b>${pct(c.aheadWon / c.ahead)}</b> <span class="muted">of ${c.ahead}</span>` : '<span class="muted">–</span>'}</td>
+      <td class="num">${c.behind ? `<b>${pct(c.behindWon / c.behind)}</b> <span class="muted">of ${c.behind}</span>` : '<span class="muted">–</span>'}</td></tr>`).join('')}</tbody></table>
+    <p class="muted" style="font-size:13px;margin-top:10px">A big gap between the columns means the early game decides these matches; a small one means comebacks are common.</p>` : '<p class="muted">Not enough games reach these rounds yet.</p>';
   drawSeries($('#count-chart'), 'countA', 'countB', 170, 'Dragons alive by round');
   drawSeries($('#eat-chart'), 'eatA', 'eatB', 170, 'Pearls eaten by round');
 
@@ -462,6 +482,7 @@ function viewMaps(key) {
     </div>
     <div class="layer-bar">
       <label class="check" title="${canFlip ? '' : 'This map has no symmetry, so games cannot be mirrored'}"><input type="checkbox" id="flip" ${mv.flip && canFlip ? 'checked' : ''} ${canFlip ? '' : 'disabled'}> Mirror games so you always start on the same side</label>
+      <label class="check" id="phase-wrap" hidden>When <select class="plain" id="phase-filter">${[['all', 'Any round'], ['open', 'Rounds 0–99'], ['mid', 'Rounds 100–299'], ['end', 'Round 300 on']].map(([v, l]) => `<option value="${v}" ${mv.phase === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
       <label class="check" id="cause-wrap" hidden>Cause <select class="plain" id="cause-filter"><option value="all">Any cause</option>${CAUSES.map((c) => `<option value="${c}" ${mv.causes === c ? 'selected' : ''}>${CAUSE_LABEL[c]}</option>`).join('')}<option value="self" ${mv.causes === 'self' ? 'selected' : ''}>Any self-inflicted</option><option value="enemy" ${mv.causes === 'enemy' ? 'selected' : ''}>Any enemy-inflicted</option></select></label>
     </div>
     <div class="board-wrap">
@@ -496,6 +517,8 @@ function viewMaps(key) {
     const causes = mv.causes === 'all' ? null : mv.causes === 'self' ? new Set(CAUSES.filter((c) => !ENEMY_CAUSES.has(c))) : mv.causes === 'enemy' ? ENEMY_CAUSES : new Set([mv.causes]);
     const L = mv.layer;
     $('#cause-wrap').hidden = !(L.startsWith('deaths') || L.startsWith('kills'));
+    $('#phase-wrap').hidden = $('#cause-wrap').hidden;
+    const [fromRound, toRound] = { all: [0, 9999], open: [0, 99], mid: [100, 299], end: [300, 9999] }[mv.phase || 'all'];
     $('#layer-help').textContent = LAYERS.find((l) => l.id === L).help;
     const flipTeams = false;
     let layer = null, bedShare = null, extra = {};
@@ -516,7 +539,7 @@ function viewMaps(key) {
       extra = { you: a.values, opp: b.values };
     } else {
       const [kind, who] = L.split('-');
-      const r = mapLayer(games, geom, { layer: kind, who, flip, causes });
+      const r = mapLayer(games, geom, { layer: kind, who, flip, causes, fromRound, toRound });
       const v = new Float32Array(r.values.length);
       for (let i = 0; i < v.length; i++) v[i] = r.values[i] / Math.max(1, games.length);
       layer = { values: v, kind: who === 'you' ? 'you' : 'opp' };
@@ -561,6 +584,7 @@ function viewMaps(key) {
   $$('.layer-bar [data-layer]').forEach((b) => { b.onclick = () => { mv.layer = b.dataset.layer; $$('.layer-bar [data-layer]').forEach((x) => x.setAttribute('aria-pressed', String(x === b))); compute(); }; });
   $('#flip').onchange = (e) => { mv.flip = e.target.checked; compute(); };
   $('#cause-filter').onchange = (e) => { mv.causes = e.target.value; compute(); };
+  $('#phase-filter').onchange = (e) => { mv.phase = e.target.value; compute(); };
   compute();
   return { cleanup: () => board.destroy() };
 }
@@ -587,7 +611,7 @@ function viewGames() {
     const col = cols.find((c) => c[0] === sortState.key) || cols[0];
     const rows = [...sel].sort((a, b) => { const va = col[2](a), vb = col[2](b); return (va < vb ? -1 : va > vb ? 1 : 0) * sortState.dir; });
     main.innerHTML = `
-      <div class="page-head"><div><div class="headline">${plural(sel.length, 'game')}</div><p class="subline">Open one to replay it with every death, pearl and split marked.</p></div></div>
+      <div class="page-head"><div><div class="headline">${plural(sel.length, 'game')}</div><p class="subline">Open one to replay it with every death, pearl and split marked.</p></div><button class="btn" id="csv" type="button" style="margin-left:auto">Download as CSV</button></div>
       <div class="table-wrap"><table id="games">
         <thead><tr>${cols.map((c) => `<th class="sortable${c[3] ? ' num' : ''}" data-k="${c[0]}" aria-sort="${c[0] === sortState.key ? (sortState.dir > 0 ? 'ascending' : 'descending') : 'none'}" tabindex="0">${c[1]}</th>`).join('')}</tr></thead>
         <tbody>${rows.slice(0, 2000).map((x) => {
@@ -611,9 +635,32 @@ function viewGames() {
       th.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } };
     });
     $$('#games tbody tr').forEach((tr) => { tr.onclick = (e) => { if (!e.target.closest('a')) location.hash = `#/game/${tr.dataset.uid}`; }; });
+    $('#csv').onclick = () => downloadCsv(rows);
   };
   render();
   return {};
+}
+
+function downloadCsv(rows) {
+  const cols = [
+    ['file', (x) => x.path], ['map', (x) => x.g.map.name], ['result', (x) => x.res], ['end', (x) => x.g.endReason], ['rounds', (x) => x.g.rounds],
+    ['your_bot', (x) => x.you], ['opponent', (x) => x.opp],
+  ];
+  for (const [key, side] of [['you', (x) => x.side], ['opp', (x) => 1 - x.side]]) {
+    const t = (x) => x.g.teams[side(x)];
+    cols.push([`${key}_final_length`, (x) => t(x).finalTotal], [`${key}_longest`, (x) => t(x).finalLongest], [`${key}_dragons`, (x) => t(x).finalDragons],
+      [`${key}_eaten`, (x) => t(x).eaten], [`${key}_eaten_natural`, (x) => t(x).eatenNatural], [`${key}_eaten_enemy_corpse`, (x) => t(x).eatenEnemyCorpse],
+      [`${key}_eaten_own_corpse`, (x) => t(x).eatenOwnCorpse], [`${key}_dragons_lost`, (x) => t(x).lost], [`${key}_length_lost`, (x) => t(x).lenLost],
+      [`${key}_kills`, (x) => t(x).kills], [`${key}_kill_length`, (x) => t(x).killLen], [`${key}_splits`, (x) => t(x).splits], [`${key}_sprints`, (x) => t(x).sprints]);
+    for (const c of CAUSES) cols.push([`${key}_length_lost_${c}`, (x) => t(x).lenLostBy[c]]);
+  }
+  const cell = (v) => { const str = String(v ?? ''); return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str; };
+  const csv = [cols.map((c) => c[0]).join(','), ...rows.map((x) => cols.map((c) => cell(c[1](x))).join(','))].join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+  a.download = 'soundings-games.csv';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
 // ---------------------------------------------------------------------------
@@ -719,7 +766,7 @@ function renderGame(x, d, onCleanup) {
       <header><h2>Pearls</h2></header>
       <div id="g-flow"></div>
     </section>
-    ${youT.measuredTurns ? `<section class="section"><header><h2>Compute</h2><p>Instructions per turn for your dragons (the server only keeps these for the side that downloaded the replay).</p></header><div id="g-instr"></div><p class="muted" style="margin-top:8px">${fmt(youT.measuredTurns)} measured turns, ${fmt(youT.instrSum / youT.measuredTurns / 1000, 0)}k instructions on average, peak ${fmt(youT.instrMax / 1e6, 2)}M; ${youT.tle} timeouts, ${youT.exceeded} over budget.</p></section>` : ''}
+    ${youT.measuredTurns ? `<section class="section"><header><h2>Compute</h2><p>Instructions per turn for your dragons (the server only keeps these for the side that downloaded the replay).</p></header><div id="g-instr"></div><p class="muted" style="margin-top:8px">${fmt(youT.measuredTurns)} measured turns, ${fmtPow(youT.instrSum / youT.measuredTurns)} instructions on average, peak ${fmtPow(youT.instrMax)}; ${youT.tle} timeouts, ${youT.exceeded} over budget.</p></section>` : ''}
     ${d.logs && d.logs.length ? `<section class="section"><header><h2>Bot output</h2><p>${plural(d.logs.length, 'line')} of logs and indicators kept in this replay.</p><input class="aside" id="log-q" type="search" placeholder="Filter logs" style="border:1px solid var(--rule-strong);border-radius:6px;padding:5px 9px;background:var(--surface)"></header><div class="feed" id="g-logs" style="max-height:360px"></div></section>` : ''}`;
 
   // Board player.
@@ -828,7 +875,7 @@ function renderGame(x, d, onCleanup) {
   show();
 }
 
-const fmtPow = (v) => (v >= 1e6 ? `${fmt(v / 1e6, v >= 1e7 ? 0 : 1)}M` : v >= 1e3 ? `${fmt(v / 1e3, 0)}k` : fmt(v));
+const fmtPow = (v) => (v >= 1e9 ? `${fmt(v / 1e9, 1)}B` : v >= 1e6 ? `${fmt(v / 1e6, v >= 1e8 ? 0 : 1)}M` : v >= 1e3 ? `${fmt(v / 1e3, 0)}k` : fmt(v));
 
 /** Every dragon's life as a band: thickness = length, end mark = cause of death. */
 function lifelines(host, dragons, R, side, onPick) {

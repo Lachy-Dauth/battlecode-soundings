@@ -38,7 +38,7 @@ function summarise(a) {
     winner: a.winner, endReason: a.endReason, result: a.result, teams: a.teams, flow: a.flow,
     firstBlood: a.firstBlood, leadChanges: a.leadChanges, decisiveRound: a.decisiveRound, check: a.check,
     timeline: { lenA: i16(tl.lenA), lenB: i16(tl.lenB), countA: i16(tl.countA), countB: i16(tl.countB),
-      eatA: i16(tl.eatA), eatB: i16(tl.eatB) },
+      eatA: i16(tl.eatA), eatB: i16(tl.eatB), longA: i16(tl.longA), longB: i16(tl.longB) },
     layers: { body: a.heat.body.map(clamp16), head: a.heat.head.map(clamp16), eat },
     deaths,
   };
@@ -65,6 +65,11 @@ self.onmessage = async (msg) => {
     const game = summarise(a);
     self.postMessage({ id, ok: true, game }, transferables(game));
   } catch (err) {
-    self.postMessage({ id, ok: false, error: String(err?.message || err) });
+    // Bounds and format errors from a file that isn't a replay read better in plain words.
+    const raw = String(err?.message || err);
+    const error = err instanceof RangeError || /Cap'n Proto|no root|truncated|pointer|no map|DataView/i.test(raw)
+      ? "Not a Battlecode replay, or it's damaged: it couldn't be decoded"
+      : raw;
+    self.postMessage({ id, ok: false, error });
   }
 };
