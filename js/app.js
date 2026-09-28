@@ -206,7 +206,12 @@ function rerender(soft = false) {
   requestAnimationFrame(() => {
     pendingRender = false;
     if (!S.games.length) return;
-    if (!current || current.landing) { location.hash = '#/overview'; route(); return; }
+    // First games in: leave the landing page, unless the user has already gone elsewhere.
+    if (!current || current.landing) {
+      if (!location.hash || location.hash === '#/') location.hash = '#/overview';
+      else route();
+      return;
+    }
     renderFilters();
     const keepScroll = scrollY;
     current?.cleanup?.();
