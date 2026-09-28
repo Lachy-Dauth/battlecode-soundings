@@ -11,6 +11,17 @@ const clamp16 = (src) => {
   return out;
 };
 
+/** Same game saved twice (e.g. .replay and .replay.gz) → same fingerprint. */
+function fingerprint(a) {
+  let h = 2166136261 >>> 0;
+  const mix = (v) => { h ^= v & 0xffff; h = Math.imul(h, 16777619) >>> 0; h ^= v >>> 16; h = Math.imul(h, 16777619) >>> 0; };
+  for (const str of [a.map.key, a.botA, a.botB]) for (let i = 0; i < str.length; i++) mix(str.charCodeAt(i));
+  mix(a.rounds); mix(a.deaths.length); mix(a.eats.length);
+  const tl = a.timeline;
+  for (const k of ['lenA', 'lenB', 'countA', 'countB', 'eatA', 'eatB']) for (const v of tl[k]) mix(v);
+  return `${h.toString(36)}-${a.rounds}-${a.deaths.length}`;
+}
+
 /** What a batch keeps per game: small scalars plus a few dense map layers. */
 function summarise(a) {
   const N = a.map.width * a.map.height;
@@ -22,6 +33,7 @@ function summarise(a) {
   const tl = a.timeline;
   const i16 = (arr) => Int16Array.from(arr, (v) => Math.min(32767, v));
   return {
+    fingerprint: fingerprint(a),
     formatVersion: a.formatVersion, botA: a.botA, botB: a.botB, map: a.map, geometry: a.geometry, rounds: a.rounds,
     winner: a.winner, endReason: a.endReason, result: a.result, teams: a.teams, flow: a.flow,
     firstBlood: a.firstBlood, leadChanges: a.leadChanges, decisiveRound: a.decisiveRound, check: a.check,

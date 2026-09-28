@@ -17,6 +17,8 @@ const S = {
   games: [],
   errors: [],
   seen: new Set(),
+  prints: new Set(),
+  duplicates: 0,
   loading: null,
   perspective: store.get('perspective', 'auto'),
   filters: { map: 'all', result: 'all', bot: 'all', opp: 'all' },
@@ -51,11 +53,13 @@ async function ingest(sources) {
   await analyseAll(pool, fresh, {
     onGame(src, g) {
       S.seen.add(`${src.path}|${src.size}`);
+      job.done++;
+      if (S.prints.has(g.fingerprint)) { S.duplicates++; job.dupes = (job.dupes || 0) + 1; tick(); return; }
+      S.prints.add(g.fingerprint);
       const uid = S.games.length + 1;
       if (!S.geoms.has(g.map.key)) S.geoms.set(g.map.key, g.geometry);
       g.geometry = null;
       S.games.push({ uid, name: src.name, path: src.path, size: src.size, src, g });
-      job.done++;
       tick();
     },
     onError(src, err) {
@@ -79,7 +83,8 @@ function renderProgress(finished) {
     box.innerHTML = `<span>Reading ${fmt(job.done)} of ${fmt(job.total)}</span><span class="meter"><div style="width:${(job.done / job.total) * 100}%"></div></span>`;
   } else if (finished) {
     box.hidden = false;
-    box.innerHTML = `<span>${plural(finished.total - finished.failed, 'replay')} read in ${(finished.ms / 1000).toFixed(1)} s${finished.failed ? `, ${finished.failed} failed` : ''}</span>`;
+    const games = finished.total - finished.failed - (finished.dupes || 0);
+    box.innerHTML = `<span>${plural(games, 'game')} read in ${(finished.ms / 1000).toFixed(1)} s${finished.dupes ? `, ${fmt(finished.dupes)} identical ${finished.dupes === 1 ? 'copy' : 'copies'} skipped` : ''}${finished.failed ? `, ${finished.failed} failed` : ''}</span>`;
     setTimeout(() => { if (!S.loading) box.hidden = true; }, 6000);
   } else box.hidden = true;
   $('#add').hidden = !S.games.length;
@@ -352,6 +357,7 @@ function viewOverview() {
     </section>
     ${a.byBot.size > 1 ? `<section class="section"><header><h2>By your bot</h2><p>Each of your submissions or bot versions, side by side.</p></header>${breakdownTable(a.byBot, 'bot')}</section>` : ''}
     ${a.byOpp.size > 1 ? `<section class="section"><header><h2>By opponent</h2></header>${breakdownTable(a.byOpp, 'opp')}</section>` : ''}
+    ${S.duplicates ? `<p class="muted section" style="font-size:13px">${plural(S.duplicates, 'file')} held a game identical to one already loaded and ${S.duplicates === 1 ? 'was' : 'were'} skipped: the same match saved twice (such as .replay and .replay.gz), or a rematch that played out move for move, which happens because the engine is deterministic.</p>` : ''}
     ${S.errors.length ? `<details class="errors section"><summary>${plural(S.errors.length, 'file')} couldn't be read</summary><ul>${S.errors.slice(0, 50).map((e) => `<li>${esc(e.path)}: ${esc(e.error)}</li>`).join('')}</ul></details>` : ''}`;
 
   const drawCauses = (mode) => {
