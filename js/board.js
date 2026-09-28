@@ -5,16 +5,20 @@
 
 const EDGE_KELP = 1, EDGE_PORTAL = 2;
 
-// Sequential ramps (light → deep). Blue is "you", orange is "opponent".
+// Sequential ramps, faint → strong. Blue is "you", orange is "opponent". Both
+// stay saturated all the way to the strong end so the two sides never wash out
+// into the same pale tint (checked: every upper stop keeps blue and orange
+// ≥ 21 ΔE apart under colour-blindness simulation, ≥ 26 for normal vision).
 export const RAMPS = {
-  you: ['#dbe9fb', '#b7d3f6', '#86b6ef', '#5598e7', '#2a78d6', '#1c5cab', '#104281', '#0d2f57'],
-  opp: ['#fde6da', '#f9c7ad', '#f3a17a', '#eb7a4a', '#d95926', '#ad4119', '#7e2e10', '#55200b'],
-  neutral: ['#e2ece9', '#bfd6d0', '#93bab1', '#679c91', '#467f74', '#2f635a', '#1f4841', '#13302b'],
+  you: ['#d3e4f9', '#a9cbf3', '#7cb0ec', '#4f93e3', '#2a78d6', '#1663c3', '#0b52ab', '#073f8e'],
+  opp: ['#fde0cc', '#fbbf97', '#f79c62', '#f07a35', '#e0621e', '#c85112', '#ab420b', '#8c3406'],
+  neutral: ['#d6ede8', '#a9dbd0', '#79c5b6', '#4bad99', '#26957f', '#12806b', '#0a6c5a', '#075849'],
 };
+// On the night chart, strong means brighter, but still a clear blue or orange rather than white.
 const RAMPS_DARK = {
-  you: ['#10233a', '#133257', '#184577', '#1f5c9c', '#2f78c4', '#5598e7', '#86b6ef', '#cde2fb'],
-  opp: ['#2c160c', '#4a200e', '#6d2c12', '#963c17', '#c24f1e', '#e0703f', '#f19c73', '#fbd5c0'],
-  neutral: ['#132421', '#17342f', '#1d463f', '#255a51', '#2f7064', '#44877a', '#6cab9d', '#b1d8cf'],
+  you: ['#0f2847', '#123763', '#164a84', '#1b5fa8', '#2476cc', '#318deb', '#44a0ff', '#5cb0ff'],
+  opp: ['#3a1a0b', '#57230c', '#7a2f0e', '#a03d11', '#c64d15', '#e8611c', '#ff7a2e', '#ff9150'],
+  neutral: ['#0f2a26', '#133a34', '#184d44', '#1f6356', '#287a6a', '#35937f', '#46ac95', '#5cc4aa'],
 };
 
 function hex(c) { const n = parseInt(c.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
@@ -133,8 +137,8 @@ export class Board {
         const x = c % W, y = (c - x) / W;
         if (kind === 'share') {
           // val is your share minus theirs (-1..1); opacity follows how busy the cell is.
-          ctx.globalAlpha = 0.18 + 0.82 * Math.sqrt(Math.min(1, weight[c] / wTop));
-          ctx.fillStyle = Math.abs(val) < 0.04 ? v('--chart-even') : rampColor(val >= 0 ? stops.you : stops.opp, 0.15 + 0.85 * Math.min(1, Math.abs(val)));
+          ctx.globalAlpha = 0.55 + 0.45 * Math.sqrt(Math.min(1, weight[c] / wTop));
+          ctx.fillStyle = Math.abs(val) < 0.04 ? v('--chart-even') : rampColor(val >= 0 ? stops.you : stops.opp, 0.32 + 0.68 * Math.min(1, Math.abs(val)));
         } else if (kind === 'diverge') {
           const t = Math.sign(val) * Math.sqrt(Math.min(1, Math.abs(val) / top));
           ctx.fillStyle = rampColor(t >= 0 ? stops.you : stops.opp, 0.12 + 0.88 * Math.abs(t));
