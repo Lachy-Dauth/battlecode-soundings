@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Soundings: Battlecode replay analysis</title>
+  <meta name="description" content="Drop UNSW Battlecode replays to see how your dragons live, eat and die: death causes, kills, the pearl economy and heatmaps of every map. Runs entirely in your browser.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230f2233'/%3E%3Ccircle cx='16' cy='16' r='9' fill='none' stroke='%2386b6ef' stroke-width='2'/%3E%3Ccircle cx='16' cy='16' r='4' fill='none' stroke='%2386b6ef' stroke-width='2' opacity='.6'/%3E%3Cpath d='M16 16 L25 10' stroke='%23e060b0' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Newsreader:ital,opsz,wght@1,6..72,400;1,6..72,500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script>try { const t = localStorage.getItem('soundings.theme'); if (t) document.documentElement.dataset.theme = t; } catch {}</script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <header class="top">
+    <div class="wrap top-row">
+      <a class="brand" href="#/" aria-label="Soundings home"><span class="brand-mark" aria-hidden="true"></span><span class="brand-name">Soundings</span></a>
+      <nav class="tabs" id="tabs" aria-label="Views" hidden>
+        <a href="#/overview" data-view="overview">Overview</a>
+        <a href="#/maps" data-view="maps">Maps</a>
+        <a href="#/games" data-view="games">Games</a>
+      </nav>
+      <div class="top-tools">
+        <div id="progress" class="progress" hidden></div>
+        <button id="add" class="btn" type="button" hidden>Add replays</button>
+        <button id="theme" class="icon-btn" type="button" aria-label="Switch light or dark">
+          <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10 3a7 7 0 0 1 0 14z" fill="currentColor"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="wrap filters" id="filters" hidden></div>
+  </header>
+
+  <main id="main" class="wrap" tabindex="-1"></main>
+
+  <footer class="wrap foot">
+    <p>Replays are read in your browser and never uploaded. Unofficial tool for <a href="https://game.battlecode.au" rel="noopener">UNSW Battlecode 2026</a>; the replay format and maps come from the <a href="https://github.com/unswcpmsoc/battlecode" rel="noopener">MIT-licensed toolkit</a>.</p>
+  </footer>
+
+  <div id="dropzone" class="dropzone" hidden><div>Drop replays, folders or zips</div></div>
+  <input id="pick-files" type="file" multiple accept=".replay,.gz,.zip,application/zip,application/gzip" hidden>
+  <input id="pick-folder" type="file" webkitdirectory multiple hidden>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

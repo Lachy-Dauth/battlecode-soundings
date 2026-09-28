@@ -1,0 +1,8 @@
+# Never commit replays: they can contain private bot behaviour and logs.
+*.replay
+*.replay.gz
+*.gz
+*.zip
+.dev/
+.DS_Store
+node_modules/
