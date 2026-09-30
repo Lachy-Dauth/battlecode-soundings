@@ -3,9 +3,12 @@
 import { isZip, listZip } from './zip.js';
 
 const REPLAY_NAME = /\.(replay|rpl)(\.gz)?$|\.gz$/i;
+const MAP_NAME = /\.map$/i;
+const WANTED = (name) => REPLAY_NAME.test(name) || MAP_NAME.test(name);
+const kindOf = (name) => (MAP_NAME.test(name) ? 'map' : 'replay');
 const SKIP_NAME = /(^|\/)(__MACOSX\/|\._|\.DS_Store$)/;
 
-/** A source is { name, path, size, read(): Promise<Uint8Array> }. */
+/** A source is { kind: 'replay' | 'map', name, path, size, read(): Promise<Uint8Array> }. */
 async function expand(file, path, out, depth = 0) {
   if (SKIP_NAME.test(path)) return;
   if (/\.zip$/i.test(file.name) || (depth === 0 && !REPLAY_NAME.test(file.name) && await isZip(file))) {
@@ -16,15 +19,15 @@ async function expand(file, path, out, depth = 0) {
       if (/\.zip$/i.test(e.name)) {
         const bytes = await e.read();
         await expand(new File([bytes], e.name), inner, out, depth + 1);
-      } else if (REPLAY_NAME.test(e.name)) {
-        out.push({ name: e.name.split('/').pop(), path: inner, size: e.size, read: () => e.read() });
+      } else if (WANTED(e.name)) {
+        out.push({ kind: kindOf(e.name), name: e.name.split('/').pop(), path: inner, size: e.size, read: () => e.read() });
       }
     }
     return;
   }
   // Loose files: take anything named like a replay, or anything picked on its own.
-  if (REPLAY_NAME.test(file.name) || depth === 0) {
-    out.push({ name: file.name, path, size: file.size, read: async () => new Uint8Array(await file.arrayBuffer()) });
+  if (WANTED(file.name) || depth === 0) {
+    out.push({ kind: kindOf(file.name), name: file.name, path, size: file.size, read: async () => new Uint8Array(await file.arrayBuffer()) });
   }
 }
 
@@ -43,7 +46,7 @@ function readDir(entry) {
 async function walkEntry(entry, out) {
   if (entry.isFile) {
     const file = await new Promise((res, rej) => entry.file(res, rej));
-    await expand(file, entry.fullPath.replace(/^\//, ''), out, REPLAY_NAME.test(file.name) || /\.zip$/i.test(file.name) ? 0 : 1);
+    await expand(file, entry.fullPath.replace(/^\//, ''), out, WANTED(file.name) || /\.zip$/i.test(file.name) ? 0 : 1);
   } else if (entry.isDirectory) {
     for (const child of await readDir(entry)) await walkEntry(child, out);
   }
@@ -56,7 +59,7 @@ export async function sourcesFrom({ items, files }) {
   if (entries.length) {
     for (const e of entries) await walkEntry(e, out);
   } else {
-    for (const f of files || []) await expand(f, f.webkitRelativePath || f.name, out, f.webkitRelativePath && !REPLAY_NAME.test(f.name) && !/\.zip$/i.test(f.name) ? 1 : 0);
+    for (const f of files || []) await expand(f, f.webkitRelativePath || f.name, out, f.webkitRelativePath && !WANTED(f.name) && !/\.zip$/i.test(f.name) ? 1 : 0);
   }
   return out;
 }

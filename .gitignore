@@ -3,6 +3,9 @@
 *.replay.gz
 *.gz
 *.zip
+# Nor maps people open in the editor.
+*.map
+*.svg
 .dev/
 .DS_Store
 node_modules/

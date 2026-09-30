@@ -5,6 +5,7 @@ import { roundsChart, butterfly, flowChart, columns, splitBar, esc, fmt, pct } f
 import { CAUSES, CAUSE_LABEL, ENEMY_CAUSES } from './analyse.js';
 import { parseMap } from './map.js';
 import { HERO_MAP } from './hero-map.js';
+import { viewEditor, addMapSources, addFromGeometry } from './editor.js';
 
 // ---------------------------------------------------------------------------
 // state
@@ -38,7 +39,21 @@ const CAUSE_ORDER = CAUSES;
 // ---------------------------------------------------------------------------
 // intake
 // ---------------------------------------------------------------------------
-async function ingest(sources) {
+async function ingest(all) {
+  // Map files go to the map editor's library; everything else is a replay.
+  const maps = all.filter((s) => s.kind === 'map');
+  const sources = all.filter((s) => s.kind !== 'map');
+  if (maps.length) {
+    const res = await addMapSources(maps);
+    const bits = [`${plural(res.added.length, 'map')} added to the map editor`];
+    if (res.duplicates) bits.push(`${res.duplicates} already there`);
+    if (res.errors.length) bits.push(`${res.errors.length} couldn't be read`);
+    flash(`${bits.join(', ')}.`);
+    if (!sources.length) {
+      if (location.hash.startsWith('#/editor')) route(); else location.hash = '#/editor';
+      return;
+    }
+  }
   const fresh = sources.filter((s) => !S.seen.has(`${s.path}|${s.size}`));
   if (!fresh.length) { flash(sources.length ? 'Those replays are already loaded.' : 'No replays found in that selection.'); return; }
   pool ||= new Pool();
@@ -88,7 +103,8 @@ function renderProgress(finished) {
     setTimeout(() => { if (!S.loading) box.hidden = true; }, 6000);
   } else box.hidden = true;
   $('#add').hidden = !S.games.length;
-  $('#tabs').hidden = !S.games.length;
+  $('#tabs').hidden = false;
+  for (const a of $$('#tabs a[data-view]')) if (a.dataset.view !== 'editor') a.hidden = !S.games.length;
 }
 
 function flash(msg) {
@@ -190,6 +206,12 @@ function route() {
   $$('#tabs a').forEach((a) => a.toggleAttribute('aria-current', a.dataset.view === (view === 'game' ? 'games' : view)));
   $$('#tabs a').forEach((a) => a.getAttribute('aria-current') !== null && a.setAttribute('aria-current', 'page'));
   renderProgress();
+  if (view === 'editor') {
+    $('#filters').hidden = true;
+    current = viewEditor(main, arg, {});
+    document.title = 'Map editor: Soundings';
+    return;
+  }
   if (!S.games.length) { renderFilters(); current = viewLanding(); return; }
   renderFilters();
   if (view === 'maps') current = viewMaps(arg);
@@ -200,11 +222,14 @@ function route() {
 }
 let pendingRender = false;
 function rerender(soft = false) {
+  if (location.hash.startsWith('#/editor')) { if (!soft) route(); return; }
   if (soft && current?.soft === false) { renderFilters(); return; }
   if (pendingRender) return;
   pendingRender = true;
   requestAnimationFrame(() => {
     pendingRender = false;
+    // Queued before the user opened the editor: the editor redraws itself.
+    if (location.hash.startsWith('#/editor')) return;
     if (!S.games.length) return;
     // First games in: leave the landing page, unless the user has already gone elsewhere.
     if (!current || current.landing) {
@@ -251,6 +276,7 @@ function viewLanding() {
         </div>
       </div>
       <p class="privacy"><b>Nothing is uploaded.</b> Replays are decoded and analysed in this browser tab, then forgotten when you close it.</p>
+      <p class="privacy">Making maps? The <a href="#/editor">map editor</a> opens .map files and zips of them, and lets you draw kelp, pearl beds, portals and dragons.</p>
       <div class="promises">
         <div>${glyph('death')}<h3>Where your length goes</h3><p>Every dead dragon is traced to kelp, its own body, a teammate, an enemy's body or a head-on crash, weighted by how long it was.</p></div>
         <div>${glyph('pearl')}<h3>The pearl economy</h3><p>How much you eat from natural beds versus corpses, how much of the enemy you ate, and how much of you fed them.</p></div>
@@ -495,7 +521,8 @@ function viewMaps(key) {
         <div id="map-board"></div>
       </div>
       <aside class="inspector">
-        <div><h2 class="chart-name" style="font-size:28px;font-weight:400">${esc(m.name)}</h2><p class="muted">${geom.width} by ${geom.height}, ${geom.symmetry === 'none' ? 'no symmetry' : `${geom.symmetry === 'xy' ? 'point' : 'mirror'} symmetry`}; ${plural(games.length, 'game')}</p></div>
+        <div><h2 class="chart-name" style="font-size:28px;font-weight:400">${esc(m.name)}</h2><p class="muted">${geom.width} by ${geom.height}, ${geom.symmetry === 'none' ? 'no symmetry' : `${geom.symmetry === 'xy' ? 'point' : 'mirror'} symmetry`}; ${plural(games.length, 'game')}</p>
+          <button class="btn" id="edit-map" type="button" style="margin-top:8px">Open in map editor</button></div>
         <p id="layer-help" class="ink2"></p>
         <div id="ramp"></div>
         <div id="cell-info" class="muted">Point at a cell for its numbers.</div>
@@ -511,6 +538,7 @@ function viewMaps(key) {
     </div>`;
 
   $$('.map-chip').forEach((b) => { b.onclick = () => { location.hash = `#/maps/${encodeURIComponent(b.dataset.key)}`; }; });
+  $('#edit-map').onclick = async () => { const e = await addFromGeometry(geom, m.name); location.hash = `#/editor/${e.id}`; };
   let info = null;
   const board = new Board($('#map-board'), geom, {
     label: `Heatmap of ${m.name}; the panel beside it describes the selected layer`,
@@ -826,7 +854,7 @@ function renderGame(x, d, onCleanup) {
   $('#speed').onchange = () => { if (playing) play(); };
   $('#scrub').oninput = (e) => { stop(); seek(Number(e.target.value)); };
   const keys = (e) => {
-    if (e.target.closest('input, select, textarea')) return;
+    if (e.target.closest?.('input, select, textarea')) return;
     if (e.key === ' ') { e.preventDefault(); playing ? stop() : play(); }
     else if (e.key === 'ArrowRight') { stop(); seek(r + (e.shiftKey ? 10 : 1)); }
     else if (e.key === 'ArrowLeft') { stop(); seek(r - (e.shiftKey ? 10 : 1)); }
@@ -966,7 +994,7 @@ function boot() {
     window.__lab = {
       S,
       async loadUrls(urls) {
-        const sources = urls.map((u) => ({ name: u.split('/').pop(), path: u, size: 0,
+        const sources = urls.map((u) => ({ kind: /\.map$/i.test(u) ? 'map' : 'replay', name: u.split('/').pop(), path: u, size: 0,
           read: async () => new Uint8Array(await (await fetch(u)).arrayBuffer()) }));
         const zips = [];
         for (const s of sources) if (/\.zip$/i.test(s.name)) zips.push(s);

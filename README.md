@@ -38,6 +38,18 @@ Drop in `.replay` files, a folder of them, or a `.zip`, and see how your dragons
   - averages with the middle half of games shaded;
   - breakdowns by map, by your bot version, and by opponent.
 
+### Map editor
+
+Open `.map` files, a folder of them, or a zip, and edit them by dragging:
+
+- **Tools:** kelp (drag along edges; a stroke follows its direction), pearl beds (paint a spawn gap, or Shift-click to fill a region enclosed by kelp), portals (click two edges), dragons for either team (drag from the head along the body), move and erase.
+- **Mirroring:** every edit is mirrored across the map's symmetry by default, dragons swapping teams, so a map stays fair while you draw it.
+- **Views:** spawn rate (the pattern a map's pearl beds draw), and who reaches each cell first (shortest path from each team's starting heads, around kelp and through portals).
+- **Checks:** the side panel checks the map the way the engine's loader does (sizes, mirrored beds, portal pairs, dragon shapes). It also warns about unfair starts, asymmetric kelp, and pearls no dragon can reach.
+- **Saving:** undo and redo; maps are kept in the browser (IndexedDB) and can be downloaded one at a time or all as a zip.
+
+Exported files use the toolkit's own layout, so an unedited map round-trips byte for byte. Any map from your replays can be opened in the editor from the Maps view.
+
 ### Which side is you
 
 - **Replays downloaded from the site** name only the downloader's bot (the server strips the other side), so that side is you. The name shown is your submission number, which lets you compare bot versions.
@@ -56,6 +68,9 @@ js/ingest.js     files, folders and zips → replay sources → worker pool
 js/aggregate.js  "you" detection, filters, per-map layers, averages
 js/board.js      the chart renderer (canvas)
 js/charts.js     SVG charts
+js/mapmodel.js   editable maps: .map read/write, mirroring, loader checks, reachability
+js/editor.js     map library and editor
+js/mapstore.js   IndexedDB map library + zip writer
 js/app.js        views
 ```
 

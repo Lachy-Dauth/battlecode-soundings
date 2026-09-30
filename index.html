@@ -17,10 +17,11 @@
   <header class="top">
     <div class="wrap top-row">
       <a class="brand" href="#/" aria-label="Soundings home"><span class="brand-mark" aria-hidden="true"></span><span class="brand-name">Soundings</span></a>
-      <nav class="tabs" id="tabs" aria-label="Views" hidden>
-        <a href="#/overview" data-view="overview">Overview</a>
-        <a href="#/maps" data-view="maps">Maps</a>
-        <a href="#/games" data-view="games">Games</a>
+      <nav class="tabs" id="tabs" aria-label="Views">
+        <a href="#/overview" data-view="overview" hidden>Overview</a>
+        <a href="#/maps" data-view="maps" hidden>Maps</a>
+        <a href="#/games" data-view="games" hidden>Games</a>
+        <a href="#/editor" data-view="editor">Map editor</a>
       </nav>
       <div class="top-tools">
         <div id="progress" class="progress" hidden></div>
@@ -40,7 +41,7 @@
   </footer>
 
   <div id="dropzone" class="dropzone" hidden><div>Drop replays, folders or zips</div></div>
-  <input id="pick-files" type="file" multiple accept=".replay,.gz,.zip,application/zip,application/gzip" hidden>
+  <input id="pick-files" type="file" multiple accept=".replay,.gz,.zip,.map,application/zip,application/gzip" hidden>
   <input id="pick-folder" type="file" webkitdirectory multiple hidden>
   <script type="module" src="js/app.js"></script>
 </body>

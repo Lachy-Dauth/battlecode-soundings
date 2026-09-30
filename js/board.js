@@ -62,6 +62,10 @@ export class Board {
     this.pearls = null;      // Int32Array: cell, src
     this.bedShare = null;    // Float32Array per cell: -1..1 who harvested each bed
     this.showSpawns = true;
+    this.spawnStyle = 'dashed'; // 'solid' draws the map's dragons as bodies with heads (editor)
+    this.bedRings = true;       // buoy rings on pearl beds; off when a layer already shades them
+    this.hoverCell = true;      // outline the cell under the pointer
+    this.decorate = null;       // (ctx, frame) => void, drawn last, for editor overlays
     this.highlight = -1;
     this.flipTeams = false;  // draw B as "you"
     host.classList.add('board');
@@ -87,6 +91,15 @@ export class Board {
     const maxH = this.opts.maxHeight || 640;
     const cell = Math.max(3, Math.min(avail / W, (maxH - pad * 2) / H, 36));
     return { cell, pad, W, H, w: cell * W + pad * 2, h: cell * H + pad * 2 };
+  }
+
+  /** Pointer position in cell units (fractional), or null off the board. */
+  pointer(e) {
+    const m = this.metrics();
+    const r = this.canvas.getBoundingClientRect();
+    const fx = (e.clientX - r.left - m.pad) / m.cell, fy = (e.clientY - r.top - m.pad) / m.cell;
+    if (fx < 0 || fy < 0 || fx >= m.W || fy >= m.H) return null;
+    return { fx, fy, x: Math.floor(fx), y: Math.floor(fy), cell: Math.floor(fy) * m.W + Math.floor(fx) };
   }
 
   cellAt(e) {
@@ -161,7 +174,7 @@ export class Board {
     }
 
     // Pearl beds: buoy rings, larger for faster beds.
-    if (g.beds) {
+    if (g.beds && (this.bedRings || this.bedShare)) {
       for (let c = 0; c < g.beds.length; c++) {
         if (!g.beds[c]) continue;
         const x = c % W, y = (c - x) / W;
@@ -180,12 +193,20 @@ export class Board {
       }
     }
 
-    // Starting positions.
+    // Starting positions: dashed outlines on charts, solid bodies in the editor.
     if (this.showSpawns && g.spawns && !this.dragons) {
-      ctx.setLineDash([Math.max(2, s * 0.25), Math.max(2, s * 0.2)]);
+      const solid = this.spawnStyle === 'solid';
+      if (!solid) ctx.setLineDash([Math.max(2, s * 0.25), Math.max(2, s * 0.2)]);
       for (const sp of g.spawns) {
         const team = this.flipTeams ? 1 - sp.team : sp.team;
-        this.strokeBody(sp.body, team === 0 ? v('--you') : v('--opp'), Math.max(1.5, s * 0.12), X, Y, s, W);
+        this.strokeBody(sp.body, team === 0 ? v('--you') : v('--opp'), solid ? Math.max(2, s * 0.5) : Math.max(1.5, s * 0.12), X, Y, s, W);
+        if (solid && sp.body.length) {
+          const hx = sp.body[0] % W, hy = (sp.body[0] - hx) / W;
+          ctx.beginPath();
+          ctx.arc(X(hx + 0.5), Y(hy + 0.5), Math.max(2, s * 0.34), 0, Math.PI * 2);
+          ctx.fillStyle = team === 0 ? v('--you-deep') : v('--opp-deep');
+          ctx.fill();
+        }
       }
       ctx.setLineDash([]);
     }
@@ -291,8 +312,10 @@ export class Board {
     ctx.lineWidth = 1;
     ctx.strokeRect(P - band - 1.5, P - band - 1.5, W * s + band * 2 + 3, H * s + band * 2 + 3);
 
+    this.decorate?.(ctx, { X, Y, s, W, H, P, v });
+
     // Hovered cell.
-    if (this.highlight >= 0) {
+    if (this.hoverCell && this.highlight >= 0) {
       const x = this.highlight % W, y = (this.highlight - x) / W;
       ctx.strokeStyle = v('--portal');
       ctx.lineWidth = 2;
